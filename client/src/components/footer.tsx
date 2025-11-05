@@ -8,8 +8,10 @@ export function Footer() {
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <span>Created by</span>
           <div className="flex items-center gap-1.5 font-semibold text-foreground">
-            <Package className="h-4 w-4 text-primary" />
-            <span>Luphonix</span>
+            
+            <a href="https://luphonix.com" target="_blank" rel="noopener noreferrer" className="hover:underline">
+              Luphonix
+            </a>
           </div>
         </div>
       </div>
