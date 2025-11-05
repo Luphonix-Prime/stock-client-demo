@@ -4,15 +4,29 @@ import multer from "multer";
 import { storage } from "./storage";
 import { qrCodeService } from "./qr-service";
 import {
+  products,
+  orders,
+  orderItems,
+  returns,
+  returnItems,
+  stockMovements,
+  stockStats,
+  discountCodes,
+  accounts,
   insertProductSchema,
   insertOrderSchema,
   insertOrderItemSchema,
-  insertStockMovementSchema,
   insertReturnSchema,
   insertReturnItemSchema,
+  insertStockMovementSchema,
+  insertDiscountCodeSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
+import { nanoid } from "nanoid";
+import { log } from "./log";
+import { db } from "@shared/db";
+import { emailService } from "./email-service";
 
 // Configure multer for file uploads (in-memory storage)
 const upload = multer({
@@ -130,8 +144,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const product = await storage.createProduct(parsed.data);
+
+      // Record purchase profit/loss in accounts table
+      if (parsed.data.costPrice && parsed.data.stockQuantity > 0) {
+        const sellingPrice = parseFloat(parsed.data.price.toString());
+        const costPrice = parseFloat(parsed.data.costPrice.toString());
+        const quantity = parsed.data.stockQuantity;
+
+        const difference = sellingPrice - costPrice;
+        const totalDifference = difference * quantity;
+
+        const currentDate = new Date();
+        const fiscalYear = currentDate.getFullYear();
+        const fiscalMonth = currentDate.getMonth() + 1;
+        const fiscalQuarter = Math.ceil(fiscalMonth / 3);
+
+        if (difference > 0) {
+          // Potential profit (selling price > cost price)
+          await db.insert(accounts).values({
+            id: nanoid(),
+            transactionType: "purchase",
+            referenceId: product.id,
+            referenceNumber: product.sku,
+            revenue: "0.00",
+            cost: (costPrice * quantity).toFixed(2),
+            profit: totalDifference.toFixed(2),
+            productId: product.id,
+            productName: product.productName,
+            category: product.category,
+            quantity: quantity,
+            notes: `Purchase with potential profit of $${difference.toFixed(2)} per unit`,
+            fiscalYear,
+            fiscalMonth,
+            fiscalQuarter,
+          });
+        } else if (difference < 0) {
+          // Potential loss (selling price < cost price)
+          await db.insert(accounts).values({
+            id: nanoid(),
+            transactionType: "purchase",
+            referenceId: product.id,
+            referenceNumber: product.sku,
+            revenue: "0.00",
+            cost: (costPrice * quantity).toFixed(2),
+            profit: totalDifference.toFixed(2), // This will be negative
+            productId: product.id,
+            productName: product.productName,
+            category: product.category,
+            quantity: quantity,
+            notes: `Purchase with potential loss of $${Math.abs(difference).toFixed(2)} per unit`,
+            fiscalYear,
+            fiscalMonth,
+            fiscalQuarter,
+          });
+        }
+      }
+
       res.status(201).json(product);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating product:", error);
       res.status(500).json({ error: "Failed to create product" });
     }
@@ -473,10 +543,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: result.error });
       }
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         remainingCredit: result.updated,
-        fullyUsed: result.wasDeleted 
+        fullyUsed: result.wasDeleted
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to use discount code" });

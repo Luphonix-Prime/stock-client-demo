@@ -5,9 +5,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Inventory from "@/pages/inventory";
 import Orders from "@/pages/orders";
-import NotFound from "@/pages/not-found";
 import StockHistory from "@/pages/stock-history";
 import StoreCredits from "@/pages/store-credits";
+import ProfitLoss from "@/pages/profit-loss";
+import NotFound from "@/pages/not-found";
 import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
 
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/orders" component={Orders} />
       <Route path="/stock-history" component={StockHistory} />
       <Route path="/store-credits" component={StoreCredits} />
+      <Route path="/profit-loss" component={ProfitLoss} />
       <Route component={NotFound} />
     </Switch>
   );
