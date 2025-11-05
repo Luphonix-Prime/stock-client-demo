@@ -26,7 +26,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from "recharts";
-import type { Product, OrderWithItems, ReturnWithItems, StockMovement } from "@shared/schema";
+import type { Product, OrderWithItems, ReturnWithItems, StockMovement, Account } from "@shared/schema";
 import { format, startOfDay, startOfHour, startOfMonth, startOfYear, subDays, subMonths, subYears } from "date-fns";
 
 type TimeRange = "hourly" | "daily" | "monthly" | "yearly";
@@ -59,7 +59,11 @@ export default function ProfitLoss() {
     queryKey: ["/api/stock-movements"],
   });
 
-  const isLoading = productsLoading || ordersLoading || returnsLoading || movementsLoading;
+  const { data: accounts = [], isLoading: accountsLoading } = useQuery<Account[]>({
+    queryKey: ["/api/accounts"],
+  });
+
+  const isLoading = productsLoading || ordersLoading || returnsLoading || movementsLoading || accountsLoading;
 
   // Create a product lookup map for cost prices
   const productMap = useMemo(() => {
@@ -134,6 +138,12 @@ export default function ProfitLoss() {
         return returnDate >= period && returnDate < nextPeriod;
       });
 
+      // Filter purchase accounts for this period
+      const periodPurchases = accounts.filter(a => {
+        const txDate = new Date(a.transactionDate!);
+        return a.transactionType === "purchase" && txDate >= period && txDate < nextPeriod;
+      });
+
       // Calculate revenue from orders
       const revenue = periodOrders.reduce((sum, order) => {
         return sum + parseFloat(order.totalAmount.toString());
@@ -163,9 +173,18 @@ export default function ProfitLoss() {
         });
       });
 
+      // Add purchase costs and potential profit from accounts
+      const purchaseCost = periodPurchases.reduce((sum, acc) => {
+        return sum + parseFloat(acc.cost.toString());
+      }, 0);
+
+      const purchaseProfit = periodPurchases.reduce((sum, acc) => {
+        return sum + parseFloat(acc.profit.toString());
+      }, 0);
+
       const netRevenue = revenue - refundAmount;
-      const netCost = cogs - returnedCost;
-      const profit = netRevenue - netCost;
+      const netCost = cogs - returnedCost + purchaseCost;
+      const profit = netRevenue - netCost + purchaseProfit;
 
       return {
         period: format(period, formatString),
@@ -178,7 +197,7 @@ export default function ProfitLoss() {
     });
 
     return data;
-  }, [orders, returns, productMap, timeRange]);
+  }, [orders, returns, productMap, timeRange, accounts]);
 
   // Calculate overall statistics
   const statistics = useMemo(() => {
@@ -187,12 +206,10 @@ export default function ProfitLoss() {
     const totalProfit = totalRevenue - totalCost;
     const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
-    // Calculate purchasing stats
-    const purchaseMovements = movements.filter(m => m.type === "in" && m.reason === "purchase");
-    const totalPurchased = purchaseMovements.reduce((sum, m) => {
-      const product = productMap.get(m.productId);
-      const costPrice = product?.costPrice ? parseFloat(product.costPrice.toString()) : 0;
-      return sum + (costPrice * m.quantity);
+    // Calculate purchasing stats from accounts table
+    const purchaseAccounts = accounts.filter(a => a.transactionType === "purchase");
+    const totalPurchased = purchaseAccounts.reduce((sum, a) => {
+      return sum + parseFloat(a.cost.toString());
     }, 0);
 
     // Current inventory value
@@ -216,7 +233,7 @@ export default function ProfitLoss() {
       totalReturns,
       returnRate,
     };
-  }, [profitData, movements, products, productMap]);
+  }, [profitData, accounts, products, productMap]);
 
   // Product category breakdown
   const categoryBreakdown = useMemo(() => {

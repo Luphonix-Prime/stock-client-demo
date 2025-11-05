@@ -565,6 +565,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Accounts routes
+  app.get("/api/accounts", async (_req, res) => {
+    try {
+      const accountsData = await db.select().from(accounts);
+      res.json(accountsData);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch accounts" });
+    }
+  });
+
   // Invoice generation
   app.get("/api/orders/:id/invoice", async (req, res) => {
     try {
