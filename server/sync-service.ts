@@ -45,46 +45,6 @@ export class DatabaseSync {
       }
 
       // Sync stock movements
-      const mysqlStockMovements = await mysqlDb.select().from(stockMovements);
-      for (const movement of mysqlStockMovements) {
-        await sqliteDb.insert(stockMovements).values(movement)
-          .onConflictDoUpdate({
-            target: stockMovements.id,
-            set: movement
-          });
-      }
-
-      // Sync stock stats
-      const mysqlStockStats = await mysqlDb.select().from(stockStats);
-      for (const stats of mysqlStockStats) {
-        await sqliteDb.insert(stockStats).values(stats)
-          .onConflictDoUpdate({
-            target: stockStats.id,
-            set: stats
-          });
-      }
-
-      // Sync returns
-      const mysqlReturns = await mysqlDb.select().from(returns);
-      for (const returnData of mysqlReturns) {
-        await sqliteDb.insert(returns).values(returnData)
-          .onConflictDoUpdate({
-            target: returns.id,
-            set: returnData
-          });
-      }
-
-      // Sync return items
-      const mysqlReturnItems = await mysqlDb.select().from(returnItems);
-      for (const item of mysqlReturnItems) {
-        await sqliteDb.insert(returnItems).values(item)
-          .onConflictDoUpdate({
-            target: returnItems.id,
-            set: item
-          });
-      }
-
-      // Sync stock movements
       const mysqlStockMovements = await mysqlDb.select().from(mysqlSchema.stockMovements);
       for (const movement of mysqlStockMovements) {
         await sqliteDb.insert(sqliteSchema.stockMovements).values(movement)
