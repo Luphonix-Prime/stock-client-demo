@@ -151,14 +151,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const costPrice = parseFloat(parsed.data.costPrice.toString());
         const quantity = parsed.data.stockQuantity;
 
+        const difference = sellingPrice - costPrice;
+        const totalDifference = difference * quantity;
+
         const currentDate = new Date();
         const fiscalYear = currentDate.getFullYear();
         const fiscalMonth = currentDate.getMonth() + 1;
         const fiscalQuarter = Math.ceil(fiscalMonth / 3);
 
-        if (sellingPrice > costPrice) {
-          // Purchase profit: (selling - cost) * quantity
-          const purchaseProfit = (sellingPrice - costPrice) * quantity;
+        if (difference > 0) {
+          // Potential profit (selling price > cost price)
           await db.insert(accounts).values({
             id: nanoid(),
             transactionType: "purchase",
@@ -166,19 +168,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             referenceNumber: product.sku,
             revenue: "0.00",
             cost: (costPrice * quantity).toFixed(2),
-            profit: purchaseProfit.toFixed(2),
+            profit: totalDifference.toFixed(2),
             productId: product.id,
             productName: product.productName,
             category: product.category,
             quantity: quantity,
-            notes: `Purchase profit: $${(sellingPrice - costPrice).toFixed(2)} per unit`,
+            notes: `Purchase with potential profit of $${difference.toFixed(2)} per unit`,
             fiscalYear,
             fiscalMonth,
             fiscalQuarter,
           });
-        } else if (costPrice > sellingPrice) {
-          // Purchase loss: (cost - selling) * quantity (stored as negative profit)
-          const purchaseLoss = -(costPrice - sellingPrice) * quantity;
+        } else if (difference < 0) {
+          // Potential loss (selling price < cost price)
           await db.insert(accounts).values({
             id: nanoid(),
             transactionType: "purchase",
@@ -186,12 +187,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             referenceNumber: product.sku,
             revenue: "0.00",
             cost: (costPrice * quantity).toFixed(2),
-            profit: purchaseLoss.toFixed(2),
+            profit: totalDifference.toFixed(2), // This will be negative
             productId: product.id,
             productName: product.productName,
             category: product.category,
             quantity: quantity,
-            notes: `Purchase loss: $${(costPrice - sellingPrice).toFixed(2)} per unit`,
+            notes: `Purchase with potential loss of $${Math.abs(difference).toFixed(2)} per unit`,
             fiscalYear,
             fiscalMonth,
             fiscalQuarter,
@@ -582,7 +583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Order not found" });
       }
 
-      const { pdfService } = await import('./pdf-service');
+      const {pdfService } = await import('./pdf-service');
       const pdfBuffer = await pdfService.generateInvoice(order);
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -607,7 +608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Original order not found" });
       }
 
-      const { pdfService } = await import('./pdf-service');
+      const {pdfService } = await import('./pdf-service');
       const pdfBuffer = await pdfService.generateReturnInvoice(returnData, order);
 
       res.setHeader('Content-Type', 'application/pdf');

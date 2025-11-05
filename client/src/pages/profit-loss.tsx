@@ -1,5 +1,4 @@
 
-```typescript
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Calendar, BarChart3 } from "lucide-react";
@@ -26,22 +25,17 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from "recharts";
-import type { Product, OrderWithItems, ReturnWithItems, Account } from "@shared/schema";
-import { format, startOfDay, startOfMonth, startOfYear, subDays, subMonths, subYears } from "date-fns";
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from "recharts";
+import type { Product, OrderWithItems, ReturnWithItems, StockMovement, Account } from "@shared/schema";
+import { format, startOfDay, startOfHour, startOfMonth, startOfYear, subDays, subMonths, subYears } from "date-fns";
 
 type TimeRange = "hourly" | "daily" | "monthly" | "yearly";
 
 interface ProfitData {
   period: string;
-  purchaseProfit: number;
-  purchaseLoss: number;
-  salesProfit: number;
-  salesLoss: number;
-  totalProfit: number;
-  totalLoss: number;
   revenue: number;
   cost: number;
+  profit: number;
   orders: number;
   returns: number;
 }
@@ -61,11 +55,15 @@ export default function ProfitLoss() {
     queryKey: ["/api/returns"],
   });
 
+  const { data: movements = [], isLoading: movementsLoading } = useQuery<StockMovement[]>({
+    queryKey: ["/api/stock-movements"],
+  });
+
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<Account[]>({
     queryKey: ["/api/accounts"],
   });
 
-  const isLoading = productsLoading || ordersLoading || returnsLoading || accountsLoading;
+  const isLoading = productsLoading || ordersLoading || returnsLoading || movementsLoading || accountsLoading;
 
   // Create a product lookup map for cost prices
   const productMap = useMemo(() => {
@@ -80,6 +78,7 @@ export default function ProfitLoss() {
 
     switch (timeRange) {
       case "hourly":
+        // Last 24 hours
         for (let i = 23; i >= 0; i--) {
           const date = new Date(now);
           date.setHours(now.getHours() - i, 0, 0, 0);
@@ -88,18 +87,21 @@ export default function ProfitLoss() {
         formatString = "HH:00";
         break;
       case "daily":
+        // Last 30 days
         for (let i = 29; i >= 0; i--) {
           periods.push(subDays(startOfDay(now), i));
         }
         formatString = "MMM dd";
         break;
       case "monthly":
+        // Last 12 months
         for (let i = 11; i >= 0; i--) {
           periods.push(subMonths(startOfMonth(now), i));
         }
         formatString = "MMM yyyy";
         break;
       case "yearly":
+        // Last 5 years
         for (let i = 4; i >= 0; i--) {
           periods.push(subYears(startOfYear(now), i));
         }
@@ -142,19 +144,7 @@ export default function ProfitLoss() {
         return a.transactionType === "purchase" && txDate >= period && txDate < nextPeriod;
       });
 
-      // Calculate purchase profit and loss
-      let purchaseProfit = 0;
-      let purchaseLoss = 0;
-      periodPurchases.forEach(acc => {
-        const profit = parseFloat(acc.profit.toString());
-        if (profit > 0) {
-          purchaseProfit += profit;
-        } else if (profit < 0) {
-          purchaseLoss += Math.abs(profit);
-        }
-      });
-
-      // Calculate sales revenue
+      // Calculate revenue from orders
       const revenue = periodOrders.reduce((sum, order) => {
         return sum + parseFloat(order.totalAmount.toString());
       }, 0);
@@ -169,25 +159,11 @@ export default function ProfitLoss() {
         });
       });
 
-      // Calculate sales profit and loss
-      const salesRevenue = revenue;
-      const salesCost = cogs;
-      const salesDifference = salesRevenue - salesCost;
-      
-      let salesProfit = 0;
-      let salesLoss = 0;
-      if (salesDifference > 0) {
-        salesProfit = salesDifference;
-      } else if (salesDifference < 0) {
-        salesLoss = Math.abs(salesDifference);
-      }
-
-      // Subtract refunded amounts
+      // Subtract refunded amounts and add back returned inventory cost
       const refundAmount = periodReturns.reduce((sum, ret) => {
         return sum + (ret.refundAmount ? parseFloat(ret.refundAmount.toString()) : 0);
       }, 0);
 
-      // Adjust sales profit/loss for returns
       let returnedCost = 0;
       periodReturns.forEach(ret => {
         ret.items.forEach(item => {
@@ -197,31 +173,24 @@ export default function ProfitLoss() {
         });
       });
 
-      const netRevenue = salesRevenue - refundAmount;
-      const netCost = salesCost - returnedCost;
-      const netSalesDifference = netRevenue - netCost;
+      // Add purchase costs and potential profit from accounts
+      const purchaseCost = periodPurchases.reduce((sum, acc) => {
+        return sum + parseFloat(acc.cost.toString());
+      }, 0);
 
-      if (netSalesDifference > 0) {
-        salesProfit = netSalesDifference;
-        salesLoss = 0;
-      } else if (netSalesDifference < 0) {
-        salesProfit = 0;
-        salesLoss = Math.abs(netSalesDifference);
-      }
+      const purchaseProfit = periodPurchases.reduce((sum, acc) => {
+        return sum + parseFloat(acc.profit.toString());
+      }, 0);
 
-      const totalProfit = purchaseProfit + salesProfit;
-      const totalLoss = purchaseLoss + salesLoss;
+      const netRevenue = revenue - refundAmount;
+      const netCost = cogs - returnedCost + purchaseCost;
+      const profit = netRevenue - netCost + purchaseProfit;
 
       return {
         period: format(period, formatString),
-        purchaseProfit: parseFloat(purchaseProfit.toFixed(2)),
-        purchaseLoss: parseFloat(purchaseLoss.toFixed(2)),
-        salesProfit: parseFloat(salesProfit.toFixed(2)),
-        salesLoss: parseFloat(salesLoss.toFixed(2)),
-        totalProfit: parseFloat(totalProfit.toFixed(2)),
-        totalLoss: parseFloat(totalLoss.toFixed(2)),
         revenue: parseFloat(netRevenue.toFixed(2)),
         cost: parseFloat(netCost.toFixed(2)),
+        profit: parseFloat(profit.toFixed(2)),
         orders: periodOrders.length,
         returns: periodReturns.length,
       };
@@ -232,19 +201,18 @@ export default function ProfitLoss() {
 
   // Calculate overall statistics
   const statistics = useMemo(() => {
-    const totalPurchaseProfit = profitData.reduce((sum, d) => sum + d.purchaseProfit, 0);
-    const totalPurchaseLoss = profitData.reduce((sum, d) => sum + d.purchaseLoss, 0);
-    const totalSalesProfit = profitData.reduce((sum, d) => sum + d.salesProfit, 0);
-    const totalSalesLoss = profitData.reduce((sum, d) => sum + d.salesLoss, 0);
-    
-    const totalProfit = totalPurchaseProfit + totalSalesProfit;
-    const totalLoss = totalPurchaseLoss + totalSalesLoss;
-    const netProfit = totalProfit - totalLoss;
-
     const totalRevenue = profitData.reduce((sum, d) => sum + d.revenue, 0);
     const totalCost = profitData.reduce((sum, d) => sum + d.cost, 0);
-    const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+    const totalProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
+    // Calculate purchasing stats from accounts table
+    const purchaseAccounts = accounts.filter(a => a.transactionType === "purchase");
+    const totalPurchased = purchaseAccounts.reduce((sum, a) => {
+      return sum + parseFloat(a.cost.toString());
+    }, 0);
+
+    // Current inventory value
     const inventoryValue = products.reduce((sum, p) => {
       const costPrice = p.costPrice ? parseFloat(p.costPrice.toString()) : 0;
       return sum + (costPrice * p.stockQuantity);
@@ -255,39 +223,62 @@ export default function ProfitLoss() {
     const returnRate = totalOrders > 0 ? (totalReturns / totalOrders) * 100 : 0;
 
     return {
-      totalPurchaseProfit,
-      totalPurchaseLoss,
-      totalSalesProfit,
-      totalSalesLoss,
-      totalProfit,
-      totalLoss,
-      netProfit,
       totalRevenue,
       totalCost,
+      totalProfit,
       profitMargin,
+      totalPurchased,
       inventoryValue,
       totalOrders,
       totalReturns,
       returnRate,
     };
-  }, [profitData, products]);
+  }, [profitData, accounts, products, productMap]);
+
+  // Product category breakdown
+  const categoryBreakdown = useMemo(() => {
+    const breakdown = new Map<string, { revenue: number; cost: number; profit: number }>();
+
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        const product = productMap.get(item.productId);
+        if (!product) return;
+
+        const category = product.category;
+        const revenue = parseFloat(item.subtotal.toString());
+        const costPrice = product.costPrice ? parseFloat(product.costPrice.toString()) : 0;
+        const cost = costPrice * item.quantity;
+        const profit = revenue - cost;
+
+        const current = breakdown.get(category) || { revenue: 0, cost: 0, profit: 0 };
+        breakdown.set(category, {
+          revenue: current.revenue + revenue,
+          cost: current.cost + cost,
+          profit: current.profit + profit,
+        });
+      });
+    });
+
+    return Array.from(breakdown.entries()).map(([category, data]) => ({
+      category,
+      ...data,
+    }));
+  }, [orders, productMap]);
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
   const chartConfig = {
-    purchaseProfit: {
-      label: "Purchase Profit",
+    revenue: {
+      label: "Revenue",
       color: "#10b981",
     },
-    purchaseLoss: {
-      label: "Purchase Loss",
-      color: "#f59e0b",
-    },
-    salesProfit: {
-      label: "Sales Profit",
-      color: "#3b82f6",
-    },
-    salesLoss: {
-      label: "Sales Loss",
+    cost: {
+      label: "Cost",
       color: "#ef4444",
+    },
+    profit: {
+      label: "Profit",
+      color: "#3b82f6",
     },
   };
 
@@ -328,42 +319,12 @@ export default function ProfitLoss() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Purchase Profit</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-600" />
+                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                <DollarSign className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600" data-testid="stat-purchase-profit">
-                  ${statistics.totalPurchaseProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  From inventory purchases
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Purchase Loss</CardTitle>
-                <TrendingDown className="h-4 w-4 text-orange-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600" data-testid="stat-purchase-loss">
-                  ${statistics.totalPurchaseLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  From inventory purchases
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Sales Profit</CardTitle>
-                <DollarSign className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600" data-testid="stat-sales-profit">
-                  ${statistics.totalSalesProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className="text-2xl font-bold text-green-600" data-testid="stat-revenue">
+                  ${statistics.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   From {statistics.totalOrders} orders
@@ -373,63 +334,45 @@ export default function ProfitLoss() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Sales Loss</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Cost</CardTitle>
                 <TrendingDown className="h-4 w-4 text-red-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600" data-testid="stat-sales-loss">
-                  ${statistics.totalSalesLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className="text-2xl font-bold text-red-600" data-testid="stat-cost">
+                  ${statistics.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  From sales transactions
+                  Cost of goods sold
                 </p>
               </CardContent>
             </Card>
-          </div>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Profit</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-600" />
+                <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+                <TrendingUp className="h-4 w-4 text-blue-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600" data-testid="stat-total-profit">
+                <div className={`text-2xl font-bold ${statistics.totalProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`} data-testid="stat-profit">
                   ${statistics.totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Purchase + Sales profit
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Loss</CardTitle>
-                <TrendingDown className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600" data-testid="stat-total-loss">
-                  ${statistics.totalLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Purchase + Sales loss
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Net Profit/Loss</CardTitle>
-                <BarChart3 className={statistics.netProfit >= 0 ? 'h-4 w-4 text-green-600' : 'h-4 w-4 text-red-600'} />
-              </CardHeader>
-              <CardContent>
-                <div className={statistics.netProfit >= 0 ? 'text-2xl font-bold text-green-600' : 'text-2xl font-bold text-red-600'} data-testid="stat-net-profit">
-                  ${statistics.netProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
                   {statistics.profitMargin.toFixed(2)}% margin
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Inventory Value</CardTitle>
+                <Package className="h-4 w-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600" data-testid="stat-inventory">
+                  ${statistics.inventoryValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Current stock value
                 </p>
               </CardContent>
             </Card>
@@ -437,35 +380,36 @@ export default function ProfitLoss() {
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Purchase Profit Chart */}
+            {/* Revenue vs Cost Line Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Purchase Profit Trend</CardTitle>
-                <CardDescription>Profit from inventory purchases over time</CardDescription>
+                <CardTitle>Revenue vs Cost Trend</CardTitle>
+                <CardDescription>Compare revenue and costs over time</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
                   <Skeleton className="h-[300px] w-full" />
                 ) : (
                   <ChartContainer config={chartConfig} className="h-[300px]">
-                    <BarChart data={profitData}>
+                    <LineChart data={profitData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="period" />
                       <YAxis />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Legend />
-                      <Bar dataKey="purchaseProfit" fill="#10b981" name="Purchase Profit" />
-                    </BarChart>
+                      <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} name="Revenue" />
+                      <Line type="monotone" dataKey="cost" stroke="#ef4444" strokeWidth={2} name="Cost" />
+                    </LineChart>
                   </ChartContainer>
                 )}
               </CardContent>
             </Card>
 
-            {/* Purchase Loss Chart */}
+            {/* Profit Bar Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Purchase Loss Trend</CardTitle>
-                <CardDescription>Loss from inventory purchases over time</CardDescription>
+                <CardTitle>Profit Analysis</CardTitle>
+                <CardDescription>Net profit by period</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -478,55 +422,7 @@ export default function ProfitLoss() {
                       <YAxis />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Legend />
-                      <Bar dataKey="purchaseLoss" fill="#f59e0b" name="Purchase Loss" />
-                    </BarChart>
-                  </ChartContainer>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Sales Profit Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Sales Profit Trend</CardTitle>
-                <CardDescription>Profit from sales transactions over time</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-[300px] w-full" />
-                ) : (
-                  <ChartContainer config={chartConfig} className="h-[300px]">
-                    <BarChart data={profitData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="period" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Legend />
-                      <Bar dataKey="salesProfit" fill="#3b82f6" name="Sales Profit" />
-                    </BarChart>
-                  </ChartContainer>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Sales Loss Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Sales Loss Trend</CardTitle>
-                <CardDescription>Loss from sales transactions over time</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-[300px] w-full" />
-                ) : (
-                  <ChartContainer config={chartConfig} className="h-[300px]">
-                    <BarChart data={profitData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="period" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Legend />
-                      <Bar dataKey="salesLoss" fill="#ef4444" name="Sales Loss" />
+                      <Bar dataKey="profit" fill="#3b82f6" name="Profit" />
                     </BarChart>
                   </ChartContainer>
                 )}
@@ -534,35 +430,142 @@ export default function ProfitLoss() {
             </Card>
           </div>
 
-          {/* Combined Profit/Loss Chart */}
-          <Card className="mb-6">
+          {/* Category Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>Profit by Category</CardTitle>
+                <CardDescription>Revenue distribution across categories</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-[300px] w-full" />
+                ) : categoryBreakdown.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={categoryBreakdown}
+                        dataKey="revenue"
+                        nameKey="category"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        label
+                      >
+                        {categoryBreakdown.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    No category data available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Additional Metrics */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Additional Metrics</CardTitle>
+                <CardDescription>Key performance indicators</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Total Purchases</span>
+                  <span className="font-semibold">${statistics.totalPurchased.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Return Rate</span>
+                  <Badge variant={statistics.returnRate > 10 ? "destructive" : "secondary"}>
+                    {statistics.returnRate.toFixed(2)}%
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Total Orders</span>
+                  <span className="font-semibold">{statistics.totalOrders}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Total Returns</span>
+                  <span className="font-semibold">{statistics.totalReturns}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Avg Order Value</span>
+                  <span className="font-semibold">
+                    ${statistics.totalOrders > 0 ? (statistics.totalRevenue / statistics.totalOrders).toFixed(2) : '0.00'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Gross Margin</span>
+                  <Badge variant="outline">
+                    {statistics.profitMargin.toFixed(2)}%
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Category Breakdown Table */}
+          <Card>
             <CardHeader>
-              <CardTitle>Combined Profit & Loss Overview</CardTitle>
-              <CardDescription>All profit and loss metrics in one view</CardDescription>
+              <CardTitle>Category Performance</CardTitle>
+              <CardDescription>Detailed breakdown by product category</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-[400px] w-full" />
-              ) : (
-                <ChartContainer config={chartConfig} className="h-[400px]">
-                  <LineChart data={profitData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
-                    <YAxis />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Legend />
-                    <Line type="monotone" dataKey="purchaseProfit" stroke="#10b981" strokeWidth={2} name="Purchase Profit" />
-                    <Line type="monotone" dataKey="purchaseLoss" stroke="#f59e0b" strokeWidth={2} name="Purchase Loss" />
-                    <Line type="monotone" dataKey="salesProfit" stroke="#3b82f6" strokeWidth={2} name="Sales Profit" />
-                    <Line type="monotone" dataKey="salesLoss" stroke="#ef4444" strokeWidth={2} name="Sales Loss" />
-                  </LineChart>
-                </ChartContainer>
-              )}
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                      <TableHead className="text-right">Profit</TableHead>
+                      <TableHead className="text-right">Margin</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {categoryBreakdown.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          No category data available
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      categoryBreakdown.map((item) => {
+                        const margin = item.revenue > 0 ? (item.profit / item.revenue) * 100 : 0;
+                        return (
+                          <TableRow key={item.category}>
+                            <TableCell className="font-medium">{item.category}</TableCell>
+                            <TableCell className="text-right text-green-600 font-semibold">
+                              ${item.revenue.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right text-red-600 font-semibold">
+                              ${item.cost.toFixed(2)}
+                            </TableCell>
+                            <TableCell className={`text-right font-semibold ${item.profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                              ${item.profit.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant={margin >= 30 ? "default" : margin >= 15 ? "secondary" : "destructive"}>
+                                {margin.toFixed(2)}%
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
           {/* Detailed Period Table */}
-          <Card>
+          <Card className="mt-6">
             <CardHeader>
               <CardTitle>Period Details</CardTitle>
               <CardDescription>Detailed profit/loss by {timeRange} period</CardDescription>
@@ -573,45 +576,30 @@ export default function ProfitLoss() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Period</TableHead>
-                      <TableHead className="text-right">Purchase Profit</TableHead>
-                      <TableHead className="text-right">Purchase Loss</TableHead>
-                      <TableHead className="text-right">Sales Profit</TableHead>
-                      <TableHead className="text-right">Sales Loss</TableHead>
-                      <TableHead className="text-right">Total Profit</TableHead>
-                      <TableHead className="text-right">Total Loss</TableHead>
-                      <TableHead className="text-right">Net</TableHead>
+                      <TableHead className="text-right">Orders</TableHead>
+                      <TableHead className="text-right">Returns</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                      <TableHead className="text-right">Profit</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {profitData.map((item, idx) => {
-                      const net = item.totalProfit - item.totalLoss;
-                      return (
-                        <TableRow key={idx}>
-                          <TableCell className="font-medium">{item.period}</TableCell>
-                          <TableCell className="text-right text-green-600 font-semibold">
-                            ${item.purchaseProfit.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-orange-600 font-semibold">
-                            ${item.purchaseLoss.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-blue-600 font-semibold">
-                            ${item.salesProfit.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-red-600 font-semibold">
-                            ${item.salesLoss.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-green-600 font-semibold">
-                            ${item.totalProfit.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-red-600 font-semibold">
-                            ${item.totalLoss.toFixed(2)}
-                          </TableCell>
-                          <TableCell className={`text-right font-semibold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ${net.toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {profitData.map((item, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{item.period}</TableCell>
+                        <TableCell className="text-right">{item.orders}</TableCell>
+                        <TableCell className="text-right">{item.returns}</TableCell>
+                        <TableCell className="text-right text-green-600 font-semibold">
+                          ${item.revenue.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right text-red-600 font-semibold">
+                          ${item.cost.toFixed(2)}
+                        </TableCell>
+                        <TableCell className={`text-right font-semibold ${item.profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                          ${item.profit.toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -622,4 +610,3 @@ export default function ProfitLoss() {
     </div>
   );
 }
-```
