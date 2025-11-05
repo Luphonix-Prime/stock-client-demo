@@ -1,6 +1,7 @@
 
 import { mysqlDb, sqliteDb, hasBothDatabases } from './db';
-import { products, orders, orderItems, stockMovements, stockStats, returns, returnItems, discountCodes } from '@shared/schema';
+import * as mysqlSchema from '@shared/schema.mysql';
+import * as sqliteSchema from '@shared/schema.sqlite';
 
 export class DatabaseSync {
   private syncInterval: NodeJS.Timeout | null = null;
@@ -14,31 +15,31 @@ export class DatabaseSync {
       console.log('Starting sync from MySQL to SQLite...');
 
       // Sync products
-      const mysqlProducts = await mysqlDb.select().from(products);
+      const mysqlProducts = await mysqlDb.select().from(mysqlSchema.products);
       for (const product of mysqlProducts) {
-        await sqliteDb.insert(products).values(product)
+        await sqliteDb.insert(sqliteSchema.products).values(product)
           .onConflictDoUpdate({
-            target: products.id,
+            target: sqliteSchema.products.id,
             set: product
           });
       }
 
       // Sync orders
-      const mysqlOrders = await mysqlDb.select().from(orders);
+      const mysqlOrders = await mysqlDb.select().from(mysqlSchema.orders);
       for (const order of mysqlOrders) {
-        await sqliteDb.insert(orders).values(order)
+        await sqliteDb.insert(sqliteSchema.orders).values(order)
           .onConflictDoUpdate({
-            target: orders.id,
+            target: sqliteSchema.orders.id,
             set: order
           });
       }
 
       // Sync order items
-      const mysqlOrderItems = await mysqlDb.select().from(orderItems);
+      const mysqlOrderItems = await mysqlDb.select().from(mysqlSchema.orderItems);
       for (const item of mysqlOrderItems) {
-        await sqliteDb.insert(orderItems).values(item)
+        await sqliteDb.insert(sqliteSchema.orderItems).values(item)
           .onConflictDoUpdate({
-            target: orderItems.id,
+            target: sqliteSchema.orderItems.id,
             set: item
           });
       }
@@ -83,13 +84,63 @@ export class DatabaseSync {
           });
       }
 
-      // Sync discount codes
-      const mysqlDiscountCodes = await mysqlDb.select().from(discountCodes);
-      for (const code of mysqlDiscountCodes) {
-        await sqliteDb.insert(discountCodes).values(code)
+      // Sync stock movements
+      const mysqlStockMovements = await mysqlDb.select().from(mysqlSchema.stockMovements);
+      for (const movement of mysqlStockMovements) {
+        await sqliteDb.insert(sqliteSchema.stockMovements).values(movement)
           .onConflictDoUpdate({
-            target: discountCodes.id,
+            target: sqliteSchema.stockMovements.id,
+            set: movement
+          });
+      }
+
+      // Sync stock stats
+      const mysqlStockStats = await mysqlDb.select().from(mysqlSchema.stockStats);
+      for (const stat of mysqlStockStats) {
+        await sqliteDb.insert(sqliteSchema.stockStats).values(stat)
+          .onConflictDoUpdate({
+            target: sqliteSchema.stockStats.id,
+            set: stat
+          });
+      }
+
+      // Sync returns
+      const mysqlReturns = await mysqlDb.select().from(mysqlSchema.returns);
+      for (const ret of mysqlReturns) {
+        await sqliteDb.insert(sqliteSchema.returns).values(ret)
+          .onConflictDoUpdate({
+            target: sqliteSchema.returns.id,
+            set: ret
+          });
+      }
+
+      // Sync return items
+      const mysqlReturnItems = await mysqlDb.select().from(mysqlSchema.returnItems);
+      for (const item of mysqlReturnItems) {
+        await sqliteDb.insert(sqliteSchema.returnItems).values(item)
+          .onConflictDoUpdate({
+            target: sqliteSchema.returnItems.id,
+            set: item
+          });
+      }
+
+      // Sync discount codes
+      const mysqlDiscountCodes = await mysqlDb.select().from(mysqlSchema.discountCodes);
+      for (const code of mysqlDiscountCodes) {
+        await sqliteDb.insert(sqliteSchema.discountCodes).values(code)
+          .onConflictDoUpdate({
+            target: sqliteSchema.discountCodes.id,
             set: code
+          });
+      }
+
+      // Sync accounts
+      const mysqlAccounts = await mysqlDb.select().from(mysqlSchema.accounts);
+      for (const account of mysqlAccounts) {
+        await sqliteDb.insert(sqliteSchema.accounts).values(account)
+          .onConflictDoUpdate({
+            target: sqliteSchema.accounts.id,
+            set: account
           });
       }
 
