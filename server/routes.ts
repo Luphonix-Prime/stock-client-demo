@@ -573,7 +573,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Order not found" });
       }
 
-      const { pdfService } = await import('./pdf-service');
+      const {pdfService } = await import('./pdf-service');
       const pdfBuffer = await pdfService.generateInvoice(order);
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -598,7 +598,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Original order not found" });
       }
 
-      const { pdfService } = await import('./pdf-service');
+      const {pdfService } = await import('./pdf-service');
       const pdfBuffer = await pdfService.generateReturnInvoice(returnData, order);
 
       res.setHeader('Content-Type', 'application/pdf');
