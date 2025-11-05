@@ -25,7 +25,7 @@ import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { nanoid } from "nanoid";
 import { log } from "./log";
-import { db } from "@shared/db";
+import { db } from "./db";
 import { emailService } from "./email-service";
 
 // Configure multer for file uploads (in-memory storage)
