@@ -1,4 +1,4 @@
-import { Package, ShoppingCart, TrendingUp, Ticket } from "lucide-react";
+import { Package, ShoppingCart, TrendingUp, Ticket, BarChart3 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +7,8 @@ export function Navigation() {
   const [isOrders] = useRoute("/orders");
   const [isStock] = useRoute("/stock-history");
   const [isStoreCredits] = useRoute("/store-credits");
+  const [isProfitLoss] = useRoute("/profit-loss");
+
 
   return (
     <nav className="border-b bg-background">
@@ -68,6 +70,19 @@ export function Navigation() {
                 >
                   <Ticket className="h-4 w-4" />
                   <span>Store Credits</span>
+                </div>
+              </Link>
+              <Link href="/profit-loss">
+                <div
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer",
+                    isProfitLoss
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Profit & Loss</span>
                 </div>
               </Link>
             </div>

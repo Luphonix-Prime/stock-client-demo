@@ -248,3 +248,65 @@ export const insertDiscountCodeSchema = createInsertSchema(discountCodes, {
 
 export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
 export type DiscountCode = typeof discountCodes.$inferSelect;
+
+/* ---------------------- ACCOUNTS (P&L) TABLE ---------------------- */
+export const accounts = mysqlTable("accounts", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  transactionType: varchar("transaction_type", { length: 50 }).notNull(), // 'sale', 'purchase', 'return', 'refund', 'adjustment'
+  referenceId: varchar("reference_id", { length: 36 }), // order_id, return_id, etc.
+  referenceNumber: varchar("reference_number", { length: 50 }), // order number, return number, etc.
+  
+  // Financial details
+  revenue: decimal("revenue", { precision: 10, scale: 2 }).default("0.00").notNull(),
+  cost: decimal("cost", { precision: 10, scale: 2 }).default("0.00").notNull(),
+  profit: decimal("profit", { precision: 10, scale: 2 }).default("0.00").notNull(),
+  
+  // Additional breakdowns
+  taxAmount: decimal("tax_amount", { precision: 10, scale: 2 }).default("0.00"),
+  discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).default("0.00"),
+  shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).default("0.00"),
+  
+  // Product/Category info
+  productId: varchar("product_id", { length: 36 }),
+  productName: varchar("product_name", { length: 255 }),
+  category: varchar("category", { length: 100 }),
+  quantity: int("quantity").default(0),
+  
+  // Customer info
+  customerName: varchar("customer_name", { length: 100 }),
+  customerEmail: varchar("customer_email", { length: 150 }),
+  
+  // Metadata
+  notes: text("notes"),
+  fiscalYear: int("fiscal_year"), // e.g., 2024
+  fiscalMonth: int("fiscal_month"), // 1-12
+  fiscalQuarter: int("fiscal_quarter"), // 1-4
+  
+  transactionDate: timestamp("transaction_date").default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertAccountSchema = createInsertSchema(accounts, {
+  transactionType: z.enum(["sale", "purchase", "return", "refund", "adjustment"]),
+  revenue: z.string().min(1, "Revenue is required"),
+  cost: z.string().min(1, "Cost is required"),
+  profit: z.string().min(1, "Profit is required"),
+  taxAmount: z.string().transform(val => val === "" ? "0.00" : val).optional(),
+  discountAmount: z.string().transform(val => val === "" ? "0.00" : val).optional(),
+  shippingCost: z.string().transform(val => val === "" ? "0.00" : val).optional(),
+  fiscalYear: z.number().int().optional(),
+  fiscalMonth: z.number().int().min(1).max(12).optional(),
+  fiscalQuarter: z.number().int().min(1).max(4).optional(),
+  quantity: z.number().int().min(0).optional(),
+  referenceId: z.string().optional(),
+  referenceNumber: z.string().optional(),
+  productId: z.string().optional(),
+  productName: z.string().optional(),
+  category: z.string().optional(),
+  customerName: z.string().optional(),
+  customerEmail: z.string().email().optional().or(z.literal("")),
+  notes: z.string().transform(val => val === "" ? null : val).nullable().optional(),
+}).omit({ id: true, createdAt: true });
+
+export type InsertAccount = z.infer<typeof insertAccountSchema>;
+export type Account = typeof accounts.$inferSelect;

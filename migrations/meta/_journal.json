@@ -8,6 +8,13 @@
       "when": 1762265079027,
       "tag": "0000_safe_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1762323364600,
+      "tag": "0001_aromatic_proteus",
+      "breakpoints": true
     }
   ]
 }
