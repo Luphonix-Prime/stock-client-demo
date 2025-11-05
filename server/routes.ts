@@ -25,7 +25,7 @@ import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { nanoid } from "nanoid";
 import { log } from "./log";
-import { db } from "@shared/db";
+import { db } from "./db";
 import { emailService } from "./email-service";
 
 // Configure multer for file uploads (in-memory storage)
@@ -565,6 +565,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Accounts routes
+  app.get("/api/accounts", async (_req, res) => {
+    try {
+      const accountsData = await db.select().from(accounts);
+      res.json(accountsData);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch accounts" });
+    }
+  });
+
   // Invoice generation
   app.get("/api/orders/:id/invoice", async (req, res) => {
     try {
@@ -573,7 +583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Order not found" });
       }
 
-      const { pdfService } = await import('./pdf-service');
+      const {pdfService } = await import('./pdf-service');
       const pdfBuffer = await pdfService.generateInvoice(order);
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -598,7 +608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Original order not found" });
       }
 
-      const { pdfService } = await import('./pdf-service');
+      const {pdfService } = await import('./pdf-service');
       const pdfBuffer = await pdfService.generateReturnInvoice(returnData, order);
 
       res.setHeader('Content-Type', 'application/pdf');
