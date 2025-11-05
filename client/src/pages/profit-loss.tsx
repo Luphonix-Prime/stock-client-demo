@@ -203,20 +203,50 @@ export default function ProfitLoss() {
   const statistics = useMemo(() => {
     const totalRevenue = profitData.reduce((sum, d) => sum + d.revenue, 0);
     const totalCost = profitData.reduce((sum, d) => sum + d.cost, 0);
-    const totalProfit = totalRevenue - totalCost;
-    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const netProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
     // Calculate purchasing stats from accounts table
     const purchaseAccounts = accounts.filter(a => a.transactionType === "purchase");
-    const totalPurchased = purchaseAccounts.reduce((sum, a) => {
-      return sum + parseFloat(a.cost.toString());
+    
+    // Purchase profit/loss from accounts
+    const purchaseProfit = purchaseAccounts.reduce((sum, a) => {
+      const profit = parseFloat(a.profit.toString());
+      return profit > 0 ? sum + profit : sum;
+    }, 0);
+    
+    const purchaseLoss = purchaseAccounts.reduce((sum, a) => {
+      const profit = parseFloat(a.profit.toString());
+      return profit < 0 ? sum + Math.abs(profit) : sum;
     }, 0);
 
-    // Current inventory value
-    const inventoryValue = products.reduce((sum, p) => {
-      const costPrice = p.costPrice ? parseFloat(p.costPrice.toString()) : 0;
-      return sum + (costPrice * p.stockQuantity);
+    // Sales profit/loss from orders
+    const salesProfit = orders.reduce((sum, order) => {
+      const revenue = parseFloat(order.totalAmount.toString());
+      let cost = 0;
+      order.items.forEach(item => {
+        const product = productMap.get(item.productId);
+        const costPrice = product?.costPrice ? parseFloat(product.costPrice.toString()) : 0;
+        cost += costPrice * item.quantity;
+      });
+      const profit = revenue - cost;
+      return profit > 0 ? sum + profit : sum;
     }, 0);
+
+    const salesLoss = orders.reduce((sum, order) => {
+      const revenue = parseFloat(order.totalAmount.toString());
+      let cost = 0;
+      order.items.forEach(item => {
+        const product = productMap.get(item.productId);
+        const costPrice = product?.costPrice ? parseFloat(product.costPrice.toString()) : 0;
+        cost += costPrice * item.quantity;
+      });
+      const profit = revenue - cost;
+      return profit < 0 ? sum + Math.abs(profit) : sum;
+    }, 0);
+
+    const totalProfit = purchaseProfit + salesProfit;
+    const totalLoss = purchaseLoss + salesLoss;
 
     const totalOrders = profitData.reduce((sum, d) => sum + d.orders, 0);
     const totalReturns = profitData.reduce((sum, d) => sum + d.returns, 0);
@@ -225,15 +255,19 @@ export default function ProfitLoss() {
     return {
       totalRevenue,
       totalCost,
-      totalProfit,
+      netProfit,
       profitMargin,
-      totalPurchased,
-      inventoryValue,
+      purchaseProfit,
+      purchaseLoss,
+      salesProfit,
+      salesLoss,
+      totalProfit,
+      totalLoss,
       totalOrders,
       totalReturns,
       returnRate,
     };
-  }, [profitData, accounts, products, productMap]);
+  }, [profitData, accounts, products, productMap, orders]);
 
   // Product category breakdown
   const categoryBreakdown = useMemo(() => {
@@ -316,15 +350,30 @@ export default function ProfitLoss() {
       <div className="flex-1 overflow-auto bg-muted/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                <DollarSign className="h-4 w-4 text-green-600" />
+                <CardTitle className="text-sm font-medium">Purchase Profit</CardTitle>
+                <TrendingUp className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600" data-testid="stat-revenue">
-                  ${statistics.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className="text-2xl font-bold text-green-600" data-testid="stat-purchase-profit">
+                  ${statistics.purchaseProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  From inventory purchases
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Sales Profit</CardTitle>
+                <ShoppingCart className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600" data-testid="stat-sales-profit">
+                  ${statistics.salesProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   From {statistics.totalOrders} orders
@@ -334,45 +383,60 @@ export default function ProfitLoss() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Cost</CardTitle>
-                <TrendingDown className="h-4 w-4 text-red-600" />
+                <CardTitle className="text-sm font-medium">Total Profit</CardTitle>
+                <DollarSign className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600" data-testid="stat-cost">
-                  ${statistics.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Cost of goods sold
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-                <TrendingUp className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className={`text-2xl font-bold ${statistics.totalProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`} data-testid="stat-profit">
+                <div className="text-2xl font-bold text-green-600" data-testid="stat-total-profit">
                   ${statistics.totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {statistics.profitMargin.toFixed(2)}% margin
+                  Combined profit
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Inventory Value</CardTitle>
-                <Package className="h-4 w-4 text-purple-600" />
+                <CardTitle className="text-sm font-medium">Purchase Loss</CardTitle>
+                <TrendingDown className="h-4 w-4 text-red-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-purple-600" data-testid="stat-inventory">
-                  ${statistics.inventoryValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className="text-2xl font-bold text-red-600" data-testid="stat-purchase-loss">
+                  ${statistics.purchaseLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Current stock value
+                  From inventory purchases
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Sales Loss</CardTitle>
+                <ShoppingCart className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600" data-testid="stat-sales-loss">
+                  ${statistics.salesLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  From {statistics.totalOrders} orders
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Loss</CardTitle>
+                <TrendingDown className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600" data-testid="stat-total-loss">
+                  ${statistics.totalLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Combined loss
                 </p>
               </CardContent>
             </Card>
@@ -380,11 +444,11 @@ export default function ProfitLoss() {
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Revenue vs Cost Line Chart */}
+            {/* Total Profit Line Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Revenue vs Cost Trend</CardTitle>
-                <CardDescription>Compare revenue and costs over time</CardDescription>
+                <CardTitle>Total Profit</CardTitle>
+                <CardDescription>Total profit over time</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -397,19 +461,18 @@ export default function ProfitLoss() {
                       <YAxis />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Legend />
-                      <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} name="Revenue" />
-                      <Line type="monotone" dataKey="cost" stroke="#ef4444" strokeWidth={2} name="Cost" />
+                      <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} name="Total Profit" />
                     </LineChart>
                   </ChartContainer>
                 )}
               </CardContent>
             </Card>
 
-            {/* Profit Bar Chart */}
+            {/* Total Loss and Total Sales Bar Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Profit Analysis</CardTitle>
-                <CardDescription>Net profit by period</CardDescription>
+                <CardTitle>Total Loss and Total Sales</CardTitle>
+                <CardDescription>Loss and sales by period</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -422,7 +485,8 @@ export default function ProfitLoss() {
                       <YAxis />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Legend />
-                      <Bar dataKey="profit" fill="#3b82f6" name="Profit" />
+                      <Bar dataKey="cost" fill="#ef4444" name="Total Loss" />
+                      <Bar dataKey="revenue" fill="#3b82f6" name="Total Sales" />
                     </BarChart>
                   </ChartContainer>
                 )}
@@ -476,8 +540,10 @@ export default function ProfitLoss() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Total Purchases</span>
-                  <span className="font-semibold">${statistics.totalPurchased.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-sm text-muted-foreground">Net Profit/Loss</span>
+                  <span className={`font-semibold ${statistics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ${statistics.netProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Return Rate</span>
