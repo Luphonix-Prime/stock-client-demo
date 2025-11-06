@@ -199,49 +199,6 @@ export default function ProfitLoss() {
     return data;
   }, [orders, returns, productMap, timeRange, accounts]);
 
-  // Payment method statistics
-  const paymentMethodStats = useMemo(() => {
-    const stats: Record<string, { revenue: number; count: number }> = {
-      cash: { revenue: 0, count: 0 },
-      credit_card: { revenue: 0, count: 0 },
-      debit_card: { revenue: 0, count: 0 },
-      upi: { revenue: 0, count: 0 },
-      bank_transfer: { revenue: 0, count: 0 },
-      store_credit: { revenue: 0, count: 0 },
-      mixed: { revenue: 0, count: 0 },
-    };
-
-    orders.forEach(order => {
-      const method = order.paymentMethod || 'cash';
-      const amount = parseFloat(order.totalAmount.toString());
-      stats[method].revenue += amount;
-      stats[method].count += 1;
-    });
-
-    returns.forEach(ret => {
-      const method = ret.paymentMethod || 'cash';
-      // Subtract refunds from revenue
-      if (ret.refundAmount) {
-        const amount = parseFloat(ret.refundAmount.toString());
-        stats[method].revenue -= amount;
-      }
-      // Add additional payments to revenue
-      if (ret.additionalPayment) {
-        const amount = parseFloat(ret.additionalPayment.toString());
-        stats[method].revenue += amount;
-      }
-    });
-
-    return Object.entries(stats)
-      .map(([method, data]) => ({
-        method: method.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        revenue: data.revenue,
-        count: data.count,
-      }))
-      .filter(item => item.count > 0 || item.revenue !== 0)
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [orders, returns]);
-
   // Calculate overall statistics
   const statistics = useMemo(() => {
     const totalRevenue = profitData.reduce((sum, d) => sum + d.revenue, 0);
