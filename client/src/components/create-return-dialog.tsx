@@ -499,6 +499,32 @@ export function CreateReturnDialog({ open, onOpenChange, order }: CreateReturnDi
             </Card>
           )}
 
+          {(() => {
+            const { additionalPayment } = calculateTotals();
+            return additionalPayment > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethod">Payment Method for Additional Payment *</Label>
+                <Select
+                  value={form.watch("paymentMethod")}
+                  onValueChange={(value) => form.setValue("paymentMethod", value)}
+                >
+                  <SelectTrigger id="paymentMethod">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                    <SelectItem value="debit_card">Debit Card</SelectItem>
+                    <SelectItem value="upi">UPI</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="store_credit">Store Credit</SelectItem>
+                    <SelectItem value="mixed">Mixed Payment</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          })()}
+
           <div className="border-t pt-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
               <Clock className="h-4 w-4" />
