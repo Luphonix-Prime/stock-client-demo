@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "c343ac07-d0c7-488e-bfc8-68df8a68540a",
-  "prevId": "5bda9146-806c-41aa-9fde-4aafa4d5a88e",
+  "id": "13dab967-b1d0-450a-bb8c-82faa3310453",
+  "prevId": "c343ac07-d0c7-488e-bfc8-68df8a68540a",
   "tables": {
     "accounts": {
       "name": "accounts",
@@ -378,6 +378,14 @@
           "autoincrement": false,
           "default": "'pending'"
         },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'cash'"
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -734,6 +742,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'cash'"
         },
         "notes": {
           "name": "notes",

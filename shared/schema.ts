@@ -67,6 +67,7 @@ export const orders = mysqlTable("orders", {
   customerEmail: varchar("customer_email", { length: 150 }),
   customerPhone: varchar("customer_phone", { length: 20 }),
   status: varchar("status", { length: 50 }).default("pending").notNull(),
+  paymentMethod: varchar("payment_method", { length: 50 }).default("cash").notNull(),
   notes: text("notes"),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
@@ -76,6 +77,7 @@ export const insertOrderSchema = createInsertSchema(orders, {
   customerName: z.string().min(1, "Customer name is required"),
   customerEmail: z.string().email().optional().or(z.literal("")),
   status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]),
+  paymentMethod: z.enum(["cash", "credit_card", "debit_card", "upi", "bank_transfer", "store_credit", "mixed"]),
   totalAmount: z.string().min(1, "Total amount is required"),
 }).omit({ id: true, createdAt: true, orderNumber: true });
 
@@ -169,6 +171,7 @@ export const returns = mysqlTable("returns", {
   customerEmail: varchar("customer_email", { length: 150 }),
   status: varchar("status", { length: 50 }).default("pending").notNull(),
   reason: varchar("reason", { length: 255 }).notNull(),
+  paymentMethod: varchar("payment_method", { length: 50 }).default("cash").notNull(),
   notes: text("notes"),
   refundAmount: decimal("refund_amount", { precision: 10, scale: 2 }),
   creditAmount: decimal("credit_amount", { precision: 10, scale: 2 }),
@@ -182,6 +185,7 @@ export const insertReturnSchema = createInsertSchema(returns, {
   customerEmail: z.string().email().optional().or(z.literal("")),
   status: z.enum(["pending", "approved", "rejected", "completed"]),
   reason: z.string().min(1, "Return reason is required"),
+  paymentMethod: z.enum(["cash", "credit_card", "debit_card", "upi", "bank_transfer", "store_credit", "mixed"]),
   refundAmount: z.string().transform(val => val === "" ? null : val).nullable().optional(),
   creditAmount: z.string().transform(val => val === "" ? null : val).nullable().optional(),
   exchangeValue: z.string().transform(val => val === "" ? null : val).nullable().optional(),

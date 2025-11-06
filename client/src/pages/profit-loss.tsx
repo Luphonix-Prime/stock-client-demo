@@ -199,6 +199,49 @@ export default function ProfitLoss() {
     return data;
   }, [orders, returns, productMap, timeRange, accounts]);
 
+  // Payment method statistics
+  const paymentMethodStats = useMemo(() => {
+    const stats: Record<string, { revenue: number; count: number }> = {
+      cash: { revenue: 0, count: 0 },
+      credit_card: { revenue: 0, count: 0 },
+      debit_card: { revenue: 0, count: 0 },
+      upi: { revenue: 0, count: 0 },
+      bank_transfer: { revenue: 0, count: 0 },
+      store_credit: { revenue: 0, count: 0 },
+      mixed: { revenue: 0, count: 0 },
+    };
+
+    orders.forEach(order => {
+      const method = order.paymentMethod || 'cash';
+      const amount = parseFloat(order.totalAmount.toString());
+      stats[method].revenue += amount;
+      stats[method].count += 1;
+    });
+
+    returns.forEach(ret => {
+      const method = ret.paymentMethod || 'cash';
+      // Subtract refunds from revenue
+      if (ret.refundAmount) {
+        const amount = parseFloat(ret.refundAmount.toString());
+        stats[method].revenue -= amount;
+      }
+      // Add additional payments to revenue
+      if (ret.additionalPayment) {
+        const amount = parseFloat(ret.additionalPayment.toString());
+        stats[method].revenue += amount;
+      }
+    });
+
+    return Object.entries(stats)
+      .map(([method, data]) => ({
+        method: method.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        revenue: data.revenue,
+        count: data.count,
+      }))
+      .filter(item => item.count > 0 || item.revenue !== 0)
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [orders, returns]);
+
   // Calculate overall statistics
   const statistics = useMemo(() => {
     const totalRevenue = profitData.reduce((sum, d) => sum + d.revenue, 0);
@@ -493,6 +536,57 @@ export default function ProfitLoss() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Payment Method Statistics */}
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Payment Method Statistics</CardTitle>
+              <CardDescription>Revenue breakdown by payment method</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Payment Method</TableHead>
+                      <TableHead className="text-right">Transactions</TableHead>
+                      <TableHead className="text-right">Total Revenue</TableHead>
+                      <TableHead className="text-right">% of Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paymentMethodStats.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                          No payment data available
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paymentMethodStats.map((item) => {
+                        const percentage = statistics.totalRevenue > 0 
+                          ? (item.revenue / statistics.totalRevenue) * 100 
+                          : 0;
+                        return (
+                          <TableRow key={item.method}>
+                            <TableCell className="font-medium">{item.method}</TableCell>
+                            <TableCell className="text-right">{item.count}</TableCell>
+                            <TableCell className={`text-right font-semibold ${item.revenue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ${Math.abs(item.revenue).toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant={percentage >= 30 ? "default" : "secondary"}>
+                                {percentage.toFixed(1)}%
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Category Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

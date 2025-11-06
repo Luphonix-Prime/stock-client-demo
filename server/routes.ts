@@ -238,8 +238,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Product not found" });
       }
       res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete product" });
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      const errorMessage = error.message || "Failed to delete product";
+      res.status(500).json({ error: errorMessage });
     }
   });
 
@@ -417,48 +419,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { items, ...returnData } = req.body;
 
-      console.log('Creating return:', {
+      console.log('Creating return with data:', {
         creditAmount: returnData.creditAmount,
         refundAmount: returnData.refundAmount,
         exchangeValue: returnData.exchangeValue,
         additionalPayment: returnData.additionalPayment,
+        customerEmail: returnData.customerEmail,
         itemsCount: items?.length
       });
 
       const newReturn = await storage.createReturn(returnData, items);
 
       // Create discount code if there's a credit amount (return value > exchange value)
-      if (returnData.creditAmount && parseFloat(returnData.creditAmount) > 0 && returnData.customerEmail) {
+      // Parse credit amount - it can be null, undefined, or a string
+      const creditAmount = returnData.creditAmount && returnData.creditAmount !== "0" && returnData.creditAmount !== "" 
+        ? parseFloat(returnData.creditAmount) 
+        : 0;
+      
+      console.log('Checking store credit creation:', {
+        rawCreditAmount: returnData.creditAmount,
+        parsedCreditAmount: creditAmount,
+        hasEmail: !!returnData.customerEmail,
+        shouldCreate: creditAmount > 0 && returnData.customerEmail
+      });
+      
+      if (creditAmount > 0 && returnData.customerEmail) {
         const code = `CREDIT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
         const expiresAt = new Date();
         expiresAt.setFullYear(expiresAt.getFullYear() + 1); // 1 year expiry
 
-        console.log('Creating discount code for future discount:', {
+        console.log('Creating discount code for store credit:', {
           code,
-          amount: returnData.creditAmount,
+          amount: creditAmount.toFixed(2),
           email: returnData.customerEmail
         });
 
-        const discountCode = await storage.createDiscountCode({
-          code,
-          customerEmail: returnData.customerEmail,
-          amount: returnData.creditAmount,
-          expiresAt,
-        });
-
-        console.log('Discount code created:', discountCode);
-
-        // Send email notification
         try {
-          await emailService.sendDiscountCode(
-            returnData.customerEmail,
+          const discountCode = await storage.createDiscountCode({
             code,
-            returnData.creditAmount,
-            expiresAt
-          );
-        } catch (emailError) {
-          console.error('Failed to send discount code email:', emailError);
+            customerEmail: returnData.customerEmail,
+            amount: creditAmount.toFixed(2),
+            expiresAt,
+          });
+
+          console.log('Discount code created successfully:', {
+            id: discountCode.id,
+            code: discountCode.code,
+            amount: discountCode.amount
+          });
+
+          // Send email notification
+          try {
+            await emailService.sendDiscountCode(
+              returnData.customerEmail,
+              code,
+              creditAmount.toFixed(2),
+              expiresAt
+            );
+            console.log('Email notification sent successfully');
+          } catch (emailError) {
+            console.error('Failed to send discount code email:', emailError);
+          }
+        } catch (discountError) {
+          console.error('Failed to create discount code:', discountError);
+          console.error('Discount code error details:', discountError);
         }
+      } else {
+        console.log('Skipping discount code creation:', {
+          creditAmount,
+          hasEmail: !!returnData.customerEmail,
+          reason: creditAmount <= 0 ? 'No credit amount' : 'No customer email'
+        });
       }
 
       // Log payable account if exchange value > return value

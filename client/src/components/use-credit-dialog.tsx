@@ -78,6 +78,7 @@ export function UseCreditDialog({ open, onOpenChange, credit }: UseCreditDialogP
       customerEmail: "",
       customerPhone: "",
       status: "pending",
+      paymentMethod: "store_credit",
       notes: "",
       totalAmount: "0",
     },
@@ -506,21 +507,46 @@ export function UseCreditDialog({ open, onOpenChange, credit }: UseCreditDialogP
           </div>
 
           {breakdown.additionalRequired > 0 && (
-            <div className="space-y-2">
-              <Label htmlFor="additionalPayment">Additional Payment Amount *</Label>
-              <Input
-                id="additionalPayment"
-                type="number"
-                step="0.01"
-                min="0"
-                value={additionalPayment}
-                onChange={(e) => setAdditionalPayment(e.target.value)}
-                placeholder="0.00"
-              />
-              <p className="text-sm text-muted-foreground">
-                Enter the additional payment amount to complete this order
-              </p>
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="additionalPayment">Additional Payment Amount *</Label>
+                <Input
+                  id="additionalPayment"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={additionalPayment}
+                  onChange={(e) => setAdditionalPayment(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Enter the additional payment amount to complete this order
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethod">Payment Method (for additional amount) *</Label>
+                <Select
+                  value={form.watch("paymentMethod")}
+                  onValueChange={(value) => form.setValue("paymentMethod", value as any)}
+                >
+                  <SelectTrigger id="paymentMethod">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                    <SelectItem value="debit_card">Debit Card</SelectItem>
+                    <SelectItem value="upi">UPI</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="mixed">Mixed</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Select payment method for the additional ${breakdown.additionalRequired.toFixed(2)}
+                </p>
+              </div>
+            </>
           )}
 
           <div className="space-y-2">

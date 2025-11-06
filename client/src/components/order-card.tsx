@@ -149,6 +149,24 @@ export function OrderCard({ order }: OrderCardProps) {
                 {order.items.length} {order.items.length === 1 ? "item" : "items"}
               </p>
             </div>
+            <div>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <Badge variant={
+                  order.status === "delivered" ? "default" :
+                  order.status === "shipped" ? "secondary" :
+                  order.status === "processing" ? "outline" :
+                  order.status === "cancelled" ? "destructive" :
+                  "secondary"
+                }>
+                  {order.status}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Payment Method</p>
+                <p className="font-semibold capitalize">
+                  {(order.paymentMethod || 'cash').replace(/_/g, ' ')}
+                </p>
+              </div>
           </div>
         </div>
 
