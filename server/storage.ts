@@ -7,6 +7,7 @@ import {
   returns,
   returnItems,
   discountCodes,
+  accounts,
   type Product,
   type InsertProduct,
   type Order,
@@ -156,8 +157,48 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProduct(id: string): Promise<boolean> {
-    const result = await db.delete(products).where(eq(products.id, id)).returning();
-    return result.length > 0;
+    try {
+      // Delete related records first to avoid foreign key constraints
+      
+      // Delete from stock stats
+      await db.delete(stockStats).where(eq(stockStats.productId, id));
+      
+      // Delete from stock movements
+      await db.delete(stockMovements).where(eq(stockMovements.productId, id));
+      
+      // Delete from accounts
+      await db.delete(accounts).where(eq(accounts.productId, id));
+      
+      // Note: We don't delete order items or return items as they are historical records
+      // The product deletion should be prevented if there are orders/returns
+      
+      // Check if product is referenced in any orders
+      const orderItemsCount = await db
+        .select()
+        .from(orderItems)
+        .where(eq(orderItems.productId, id));
+      
+      if (orderItemsCount.length > 0) {
+        throw new Error("Cannot delete product that has been sold in orders");
+      }
+      
+      // Check if product is referenced in any returns
+      const returnItemsCount = await db
+        .select()
+        .from(returnItems)
+        .where(eq(returnItems.productId, id));
+      
+      if (returnItemsCount.length > 0) {
+        throw new Error("Cannot delete product that has been returned");
+      }
+      
+      // Finally delete the product
+      const result = await db.delete(products).where(eq(products.id, id)).returning();
+      return result.length > 0;
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      throw error;
+    }
   }
 
   // Orders
@@ -360,6 +401,14 @@ export class DatabaseStorage implements IStorage {
     const returnId = randomUUID();
     const returnNumber = `RET-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
+    console.log('Database: Creating return with values:', {
+      returnId,
+      returnNumber,
+      creditAmount: data.creditAmount,
+      refundAmount: data.refundAmount,
+      customerEmail: data.customerEmail
+    });
+
     await db.insert(returns).values({
       id: returnId,
       returnNumber,
@@ -368,6 +417,12 @@ export class DatabaseStorage implements IStorage {
     
     const returnResult = await db.select().from(returns).where(eq(returns.id, returnId));
     const newReturn = returnResult[0];
+
+    console.log('Database: Return created in DB:', {
+      id: newReturn.id,
+      creditAmount: newReturn.creditAmount,
+      refundAmount: newReturn.refundAmount
+    });
 
     const createdItems: ReturnItem[] = [];
     for (const item of items) {
@@ -440,6 +495,14 @@ export class DatabaseStorage implements IStorage {
     // Ensure amount is properly formatted
     const amount = typeof data.amount === 'string' ? data.amount : String(data.amount);
 
+    console.log('Database: Inserting discount code:', {
+      id,
+      code: data.code,
+      customerEmail: data.customerEmail,
+      amount,
+      expiresAt: data.expiresAt
+    });
+
     await db.insert(discountCodes).values({
       ...data,
       id,
@@ -451,7 +514,16 @@ export class DatabaseStorage implements IStorage {
     const discountCodeResult = await db.select().from(discountCodes).where(eq(discountCodes.id, id));
     const discountCode = discountCodeResult[0];
 
-    console.log('Database: Created discount code', { id: discountCode.id, code: discountCode.code, amount: discountCode.amount });
+    if (!discountCode) {
+      throw new Error('Failed to retrieve created discount code');
+    }
+
+    console.log('Database: Created discount code successfully', { 
+      id: discountCode.id, 
+      code: discountCode.code, 
+      amount: discountCode.amount,
+      customerEmail: discountCode.customerEmail
+    });
     return discountCode;
   }
 

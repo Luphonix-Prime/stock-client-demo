@@ -78,6 +78,7 @@ export function UseCreditDialog({ open, onOpenChange, credit }: UseCreditDialogP
       customerEmail: "",
       customerPhone: "",
       status: "pending",
+      paymentMethod: "store_credit",
       notes: "",
       totalAmount: "0",
     },

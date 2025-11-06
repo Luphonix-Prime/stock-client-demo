@@ -80,6 +80,7 @@ export function CreateOrderDialog({ open, onOpenChange, initialProduct }: Create
       customerEmail: "",
       customerPhone: "",
       status: "pending",
+      paymentMethod: undefined, // Initialize paymentMethod
       notes: "",
       totalAmount: "0",
     },
@@ -153,7 +154,7 @@ export function CreateOrderDialog({ open, onOpenChange, initialProduct }: Create
 
   const updateQuantity = (productId: string, quantity: number) => {
     if (quantity < 1) return;
-    
+
     const product = products.find(p => p.id === productId);
     if (product && quantity > product.stockQuantity) {
       toast({
@@ -163,7 +164,7 @@ export function CreateOrderDialog({ open, onOpenChange, initialProduct }: Create
       });
       return;
     }
-    
+
     setOrderItems(
       orderItems.map((item) =>
         item.productId === productId
@@ -255,10 +256,10 @@ export function CreateOrderDialog({ open, onOpenChange, initialProduct }: Create
                 <Label htmlFor="status">Status</Label>
                 <Select
                   value={form.watch("status")}
-                  onValueChange={(value) => form.setValue("status", value as any)}
+                  onValueChange={(value) => form.setValue("status", value as InsertOrder["status"])}
                 >
                   <SelectTrigger id="status" data-testid="select-status">
-                    <SelectValue />
+                    <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">Pending</SelectItem>
@@ -268,6 +269,33 @@ export function CreateOrderDialog({ open, onOpenChange, initialProduct }: Create
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
+                {form.formState.errors.status && (
+                  <p className="text-sm text-destructive">{form.formState.errors.status.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethod">Payment Method</Label>
+                <Select
+                  value={form.watch("paymentMethod") || ""}
+                  onValueChange={(value) => form.setValue("paymentMethod", value as InsertOrder["paymentMethod"])}
+                >
+                  <SelectTrigger id="paymentMethod" data-testid="select-payment-method">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                    <SelectItem value="debit_card">Debit Card</SelectItem>
+                    <SelectItem value="upi">UPI</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="store_credit">Store Credit</SelectItem>
+                    <SelectItem value="mixed">Mixed</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.formState.errors.paymentMethod && (
+                  <p className="text-sm text-destructive">{form.formState.errors.paymentMethod.message}</p>
+                )}
               </div>
             </div>
           </div>

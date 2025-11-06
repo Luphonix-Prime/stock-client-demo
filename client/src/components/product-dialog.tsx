@@ -122,7 +122,21 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
   };
 
   const generateSKU = () => {
-    const sku = `SKU-${nanoid(8).toUpperCase()}`;
+    const productName = form.getValues("productName");
+    if (!productName || productName.trim() === "") {
+      // Fallback to random SKU if no product name
+      const sku = `SKU-${nanoid(8).toUpperCase()}`;
+      form.setValue("sku", sku);
+      return;
+    }
+    
+    // Convert product name to SKU format: lowercase, replace spaces with hyphens
+    const sku = productName
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, ''); // Remove special characters except hyphens
+    
     form.setValue("sku", sku);
   };
 

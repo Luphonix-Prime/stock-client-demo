@@ -25,7 +25,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { insertReturnSchema, type OrderWithItems, type Product } from "@shared/schema";
+import { insertReturnSchema, type OrderWithItems, type Product, type InsertReturn } from "@shared/schema";
 import { QRScannerDialog } from "@/components/qr-scanner-dialog";
 import { z } from "zod";
 
@@ -59,14 +59,15 @@ export function CreateReturnDialog({ open, onOpenChange, order }: CreateReturnDi
     queryKey: ["/api/products"],
   });
 
-  const form = useForm({
+  const form = useForm<InsertReturn>({
     resolver: zodResolver(insertReturnSchema),
     defaultValues: {
       orderId: "",
       orderNumber: "",
       customerName: "",
       customerEmail: "",
-      status: "pending" as const,
+      status: "pending",
+      paymentMethod: "cash",
       reason: "",
       notes: "",
       refundAmount: "0",
@@ -92,7 +93,7 @@ export function CreateReturnDialog({ open, onOpenChange, order }: CreateReturnDi
   }, [order, open]);
 
   const createReturnMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: InsertReturn) => {
       return await apiRequest("POST", "/api/returns", data);
     },
     onSuccess: () => {
@@ -102,7 +103,7 @@ export function CreateReturnDialog({ open, onOpenChange, order }: CreateReturnDi
       const { credit } = calculateTotals();
       toast({
         title: "Return Created",
-        description: credit > 0 
+        description: credit > 0
           ? `Return has been created successfully. A store credit discount code for $${credit.toFixed(2)} has been sent to the customer's email.`
           : "Return has been created successfully.",
       });
@@ -122,7 +123,6 @@ export function CreateReturnDialog({ open, onOpenChange, order }: CreateReturnDi
     setReturnItems(items =>
       items.map(item => {
         if (item.productId === productId) {
-          // Get the original order item to check max quantity
           const originalItem = order?.items.find(oi => oi.productId === productId);
           const maxQty = originalItem ? originalItem.quantity : 999;
           const quantity = Math.max(0, Math.min(newQuantity, maxQty));
@@ -202,37 +202,32 @@ export function CreateReturnDialog({ open, onOpenChange, order }: CreateReturnDi
       }
     });
 
-    // Calculate based on return value vs exchange value
     const hasExchange = totalExchangeValue > 0;
-    
+
     let refundAmount = 0;
     let creditAmount = 0;
     let additionalPayment = 0;
-    
+
     if (hasExchange) {
       const difference = totalReturnValue - totalExchangeValue;
       if (difference > 0) {
-        // Return value > exchange value = Store credit (future discount)
         refundAmount = 0;
         creditAmount = difference;
         additionalPayment = 0;
       } else if (difference < 0) {
-        // Return value < exchange value = Payable account (customer owes money)
         refundAmount = 0;
         creditAmount = 0;
         additionalPayment = Math.abs(difference);
       }
-      // else: even exchange, no refund, credit, or payment
     } else {
-      // No exchange - full refund
       refundAmount = totalReturnValue;
       creditAmount = 0;
       additionalPayment = 0;
     }
 
-    return { 
-      total: totalReturnValue, 
-      refund: refundAmount, 
+    return {
+      total: totalReturnValue,
+      refund: refundAmount,
       credit: creditAmount,
       exchangeValue: totalExchangeValue,
       additionalPayment: additionalPayment
@@ -253,22 +248,25 @@ export function CreateReturnDialog({ open, onOpenChange, order }: CreateReturnDi
 
     const { refund, credit, exchangeValue, additionalPayment } = calculateTotals();
 
-    console.log('Submitting return:', {
-      refund: refund.toFixed(2),
-      credit: credit.toFixed(2),
-      exchangeValue: exchangeValue.toFixed(2),
-      additionalPayment: additionalPayment.toFixed(2),
+    const returnPayload = {
+      ...data,
+      refundAmount: refund > 0 ? refund.toFixed(2) : "0",
+      creditAmount: credit > 0 ? credit.toFixed(2) : "0",
+      exchangeValue: exchangeValue > 0 ? exchangeValue.toFixed(2) : "0",
+      additionalPayment: additionalPayment > 0 ? additionalPayment.toFixed(2) : "0",
+      items: itemsToReturn,
+    };
+
+    console.log('Frontend: Submitting return with payload:', {
+      refundAmount: returnPayload.refundAmount,
+      creditAmount: returnPayload.creditAmount,
+      exchangeValue: returnPayload.exchangeValue,
+      additionalPayment: returnPayload.additionalPayment,
+      customerEmail: returnPayload.customerEmail,
       itemsCount: itemsToReturn.length
     });
 
-    createReturnMutation.mutate({
-      ...data,
-      refundAmount: refund > 0 ? refund.toFixed(2) : null,
-      creditAmount: credit > 0 ? credit.toFixed(2) : null,
-      exchangeValue: exchangeValue > 0 ? exchangeValue.toFixed(2) : null,
-      additionalPayment: additionalPayment > 0 ? additionalPayment.toFixed(2) : null,
-      items: itemsToReturn,
-    });
+    createReturnMutation.mutate(returnPayload);
   });
 
   const { total, refund, credit } = calculateTotals();

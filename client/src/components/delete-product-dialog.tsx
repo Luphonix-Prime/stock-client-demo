@@ -38,10 +38,11 @@ export function DeleteProductDialog({
       });
       onOpenChange(false);
     },
-    onError: () => {
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to delete product. Please try again.";
       toast({
         title: "Error",
-        description: "Failed to delete product. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     },

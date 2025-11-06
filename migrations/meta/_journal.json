@@ -8,6 +8,13 @@
       "when": 1762408554424,
       "tag": "0000_short_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1762406894801,
+      "tag": "0002_clumsy_absorbing_man",
+      "breakpoints": true
     }
   ]
 }
