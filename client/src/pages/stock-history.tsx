@@ -62,33 +62,52 @@ export default function StockHistory() {
 
   // Calculate overall statistics
   const statistics = useMemo(() => {
-    const totalSold = movements
-      .filter(m => m.type === "out" && m.reason === "sale")
+    // Calculate from stock movements
+    const totalPurchasedFromMovements = movements
+      .filter(m => m.type === "in" && (m.reason === "Purchase" || m.reason === "purchase"))
       .reduce((sum, m) => sum + m.quantity, 0);
 
-    const totalReturned = movements
-      .filter(m => m.type === "in" && m.reason === "return")
+    const totalReturnedFromMovements = movements
+      .filter(m => m.type === "in" && (m.reason === "Return" || m.reason === "return"))
       .reduce((sum, m) => sum + m.quantity, 0);
 
-    const totalPurchased = movements
-      .filter(m => m.type === "in" && m.reason === "purchase")
+    const totalSoldFromMovements = movements
+      .filter(m => m.type === "out" && (m.reason === "Sale" || m.reason === "sale"))
       .reduce((sum, m) => sum + m.quantity, 0);
+
+    // Calculate from orders
+    const totalSoldFromOrders = orders.reduce((sum, order) => {
+      if (order.items && Array.isArray(order.items)) {
+        return sum + order.items.reduce((itemSum: number, item: any) => itemSum + item.quantity, 0);
+      }
+      return sum;
+    }, 0);
+
+    // Calculate from returns
+    const totalReturnedFromReturns = returns.reduce((sum, ret) => {
+      if (ret.items && Array.isArray(ret.items)) {
+        return sum + ret.items.reduce((itemSum: number, item: any) => itemSum + item.quantity, 0);
+      }
+      return sum;
+    }, 0);
 
     const totalAvailable = products.reduce((sum, p) => sum + p.stockQuantity, 0);
+    const totalSold = totalSoldFromMovements + totalSoldFromOrders;
+    const totalReturned = totalReturnedFromMovements + totalReturnedFromReturns;
 
     return {
       available: totalAvailable,
       sold: totalSold,
       returned: totalReturned,
-      purchased: totalPurchased,
+      purchased: totalPurchasedFromMovements,
     };
-  }, [movements, products]);
+  }, [movements, products, orders, returns]);
 
   // Calculate per-product stock statistics
   const stockStats = useMemo(() => {
     const statsMap = new Map<string, StockStats>();
 
-    // Initialize with product stock quantities
+    // Initialize with zeros
     products.forEach(p => {
       statsMap.set(p.id, {
         productId: p.id,
@@ -99,32 +118,53 @@ export default function StockHistory() {
       });
     });
 
-    // Process stock movements
+    // Process stock movements to calculate sold, returned, and purchased
     movements.forEach(m => {
-      const currentStats = statsMap.get(m.productId) || { productId: m.productId, available: 0, sold: 0, returned: 0, purchased: 0 };
+      const currentStats = statsMap.get(m.productId);
+      if (!currentStats) return;
 
       switch (m.type) {
         case "in":
-          if (m.reason === "purchase") {
+          if (m.reason === "Purchase" || m.reason === "purchase") {
             currentStats.purchased += m.quantity;
-            currentStats.available += m.quantity;
-          } else if (m.reason === "return") {
+          } else if (m.reason === "Return" || m.reason === "return") {
             currentStats.returned += m.quantity;
-            currentStats.available += m.quantity;
           }
           break;
         case "out":
-          if (m.reason === "sale") {
+          if (m.reason === "Sale" || m.reason === "sale") {
             currentStats.sold += m.quantity;
-            currentStats.available -= m.quantity;
           }
           break;
       }
-      statsMap.set(m.productId, currentStats);
+    });
+
+    // Process orders to count sold items
+    orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item: any) => {
+          const stats = statsMap.get(item.productId);
+          if (stats) {
+            stats.sold += item.quantity;
+          }
+        });
+      }
+    });
+
+    // Process returns to count returned items
+    returns.forEach(ret => {
+      if (ret.items && Array.isArray(ret.items)) {
+        ret.items.forEach((item: any) => {
+          const stats = statsMap.get(item.productId);
+          if (stats) {
+            stats.returned += item.quantity;
+          }
+        });
+      }
     });
 
     return Array.from(statsMap.values());
-  }, [products, movements]);
+  }, [products, movements, orders, returns]);
 
 
   // Prepare product data for the table using stock stats

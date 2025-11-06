@@ -61,6 +61,11 @@ export function DeleteProductDialog({
           <AlertDialogDescription className="pt-3">
             Are you sure you want to delete{" "}
             <span className="font-semibold text-foreground">{product.productName}</span>?
+            <br />
+            <br />
+            This will remove the product from inventory, but all historical records including orders, returns, stock movements, and profit/loss data will be preserved.
+            <br />
+            <br />
             This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>

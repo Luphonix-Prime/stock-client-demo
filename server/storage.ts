@@ -158,43 +158,27 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProduct(id: string): Promise<boolean> {
     try {
-      // Delete related records first to avoid foreign key constraints
+      // Only delete from product-specific tables
+      // Historical records (orders, returns, stock movements, accounts) are preserved
       
-      // Delete from stock stats
+      // Delete from stock stats (product-specific tracking)
       await db.delete(stockStats).where(eq(stockStats.productId, id));
       
-      // Delete from stock movements
-      await db.delete(stockMovements).where(eq(stockMovements.productId, id));
+      // Note: We preserve all historical data:
+      // - order items (sales history)
+      // - return items (return history)
+      // - stock movements (stock history)
+      // - accounts (profit/loss history)
       
-      // Delete from accounts
-      await db.delete(accounts).where(eq(accounts.productId, id));
-      
-      // Note: We don't delete order items or return items as they are historical records
-      // The product deletion should be prevented if there are orders/returns
-      
-      // Check if product is referenced in any orders
-      const orderItemsCount = await db
-        .select()
-        .from(orderItems)
-        .where(eq(orderItems.productId, id));
-      
-      if (orderItemsCount.length > 0) {
-        throw new Error("Cannot delete product that has been sold in orders");
+      // Delete the product from inventory
+      // SQLite doesn't support .returning(), so we check if product exists first
+      const existing = await db.select().from(products).where(eq(products.id, id));
+      if (existing.length === 0) {
+        return false;
       }
       
-      // Check if product is referenced in any returns
-      const returnItemsCount = await db
-        .select()
-        .from(returnItems)
-        .where(eq(returnItems.productId, id));
-      
-      if (returnItemsCount.length > 0) {
-        throw new Error("Cannot delete product that has been returned");
-      }
-      
-      // Finally delete the product
-      const result = await db.delete(products).where(eq(products.id, id)).returning();
-      return result.length > 0;
+      await db.delete(products).where(eq(products.id, id));
+      return true;
     } catch (error: any) {
       console.error('Error deleting product:', error);
       throw error;
