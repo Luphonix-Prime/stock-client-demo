@@ -3,6 +3,52 @@ import PDFDocument from 'pdfkit';
 import type { OrderWithItems, ReturnWithItems } from '@shared/schema';
 
 export class PDFService {
+  private addStoreHeader(doc: PDFDocument) {
+    // Store name and logo placeholder
+    doc.fontSize(24).font('Helvetica-Bold').text('FABRIX', { align: 'center' });
+    doc.moveDown(0.3);
+    
+    // Store details
+    doc.fontSize(10).font('Helvetica');
+    doc.text('SUPER MALL-2, FF/152, Infocity, Gandhinagar, Gujarat 382007', { align: 'center' });
+    doc.text('Phone: +91 99245 55721 | WhatsApp: +91 80003 55721', { align: 'center' });
+    //doc.text('Email: store@example.com | Website: www.yourstore.com', { align: 'center' });
+    //doc.text('GSTIN: 22AAAAA0000A1Z5', { align: 'center' });
+    doc.moveDown(0.5);
+    
+    // Divider line
+    doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+    doc.moveDown();
+  }
+
+  private addCustomerInfo(doc: PDFDocument, customerName: string, customerEmail?: string, customerPhone?: string) {
+    const startY = doc.y;
+    
+    doc.fontSize(12).font('Helvetica-Bold').text('BILL TO:', 50, startY);
+    doc.fontSize(10).font('Helvetica');
+    doc.text(customerName, 50, startY + 20);
+    if (customerPhone) doc.text(`Phone: ${customerPhone}`, 50);
+    if (customerEmail) doc.text(`Email: ${customerEmail}`, 50);
+  }
+
+  private addTermsAndConditions(doc: PDFDocument) {
+    doc.moveDown(1.5);
+    doc.fontSize(10).font('Helvetica-Bold').text('Terms & Conditions:', 50);
+    doc.fontSize(8).font('Helvetica');
+    doc.text('• Items can be exchanged within 7 days with original tags & bill.', 50);
+    doc.text('• No cash refunds, only store credit or exchange.', 50);
+    doc.text('• Sale items are non-returnable.', 50);
+    doc.text('• Please check your items before leaving the store.', 50);
+  }
+
+  private addFooter(doc: PDFDocument) {
+    doc.moveDown(2);
+    doc.fontSize(12).font('Helvetica-Bold').text('Thank you for shopping with us!', { align: 'center' });
+    doc.fontSize(10).font('Helvetica').text('Visit us again soon!', { align: 'center' });
+    doc.moveDown(0.5);
+    //doc.fontSize(8).text('Follow us on Instagram & Facebook: @yourstore', { align: 'center' });
+  }
+
   async generateReturnInvoice(returnData: ReturnWithItems, order: OrderWithItems): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
@@ -15,23 +61,31 @@ export class PDFService {
           resolve(pdfBuffer);
         });
 
-        // Header
-        doc.fontSize(20).text('RETURN/EXCHANGE INVOICE', { align: 'center' });
-        doc.moveDown();
+        // Store header
+        this.addStoreHeader(doc);
 
-        // Return details
-        doc.fontSize(10);
-        doc.text(`Return Number: ${returnData.returnNumber}`, { align: 'right' });
-        doc.text(`Original Order: ${returnData.orderNumber}`, { align: 'right' });
-        doc.text(`Date: ${new Date(returnData.createdAt).toLocaleDateString()}`, { align: 'right' });
-        doc.moveDown();
+        // Invoice title
+        doc.fontSize(20).font('Helvetica-Bold').text('RETURN/EXCHANGE INVOICE', { align: 'center' });
+        doc.moveDown(0.5);
 
-        // Customer details
-        doc.fontSize(12).text('Customer:', { underline: true });
-        doc.fontSize(10);
-        doc.text(returnData.customerName);
-        if (returnData.customerEmail) doc.text(returnData.customerEmail);
-        doc.moveDown();
+        // Invoice details (right aligned)
+        const detailsStartY = doc.y;
+        doc.fontSize(10).font('Helvetica');
+        doc.text(`Return No: ${returnData.returnNumber}`, 350, detailsStartY, { align: 'right' });
+        doc.text(`Original Order: ${returnData.orderNumber}`, 350, detailsStartY + 15, { align: 'right' });
+        doc.text(`Date: ${new Date(returnData.createdAt).toLocaleString('en-IN', { 
+          day: '2-digit', 
+          month: 'short', 
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })}`, 350, detailsStartY + 30, { align: 'right' });
+
+        // Customer details (left side)
+        doc.y = detailsStartY;
+        this.addCustomerInfo(doc, returnData.customerName, returnData.customerEmail);
+        
+        doc.moveDown(2);
 
         // Returned items table
         let tableTop = doc.y;
@@ -135,23 +189,23 @@ export class PDFService {
 
         // Reason
         if (returnData.reason) {
-          doc.moveDown(2);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('Return Reason:', { underline: true });
-          doc.text(returnData.reason);
+          doc.moveDown(1.5);
+          doc.fontSize(10).font('Helvetica-Bold').text('Return Reason:', 50);
+          doc.fontSize(10).font('Helvetica').text(returnData.reason, 50);
         }
 
         // Notes
         if (returnData.notes) {
-          doc.moveDown();
-          doc.fontSize(10).font('Helvetica');
-          doc.text('Notes:', { underline: true });
-          doc.text(returnData.notes);
+          doc.moveDown(1);
+          doc.fontSize(10).font('Helvetica-Bold').text('Notes:', 50);
+          doc.fontSize(10).font('Helvetica').text(returnData.notes, 50);
         }
 
+        // Terms and conditions
+        this.addTermsAndConditions(doc);
+
         // Footer
-        doc.moveDown(3);
-        doc.fontSize(8).text('Thank you for your business!', { align: 'center' });
+        this.addFooter(doc);
 
         doc.end();
       } catch (error) {
@@ -172,23 +226,31 @@ export class PDFService {
           resolve(pdfBuffer);
         });
 
-        // Header
-        doc.fontSize(20).text('INVOICE', { align: 'center' });
-        doc.moveDown();
+        // Store header
+        this.addStoreHeader(doc);
 
-        // Order details
-        doc.fontSize(10);
-        doc.text(`Order Number: ${order.orderNumber}`, { align: 'right' });
-        doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, { align: 'right' });
-        doc.moveDown();
+        // Invoice title
+        doc.fontSize(20).font('Helvetica-Bold').text('TAX INVOICE', { align: 'center' });
+        doc.moveDown(0.5);
 
-        // Customer details
-        doc.fontSize(12).text('Bill To:', { underline: true });
-        doc.fontSize(10);
-        doc.text(order.customerName);
-        if (order.customerEmail) doc.text(order.customerEmail);
-        if (order.customerPhone) doc.text(order.customerPhone);
-        doc.moveDown();
+        // Invoice details (right aligned)
+        const detailsStartY = doc.y;
+        doc.fontSize(10).font('Helvetica');
+        doc.text(`Invoice No: ${order.orderNumber}`, 350, detailsStartY, { align: 'right' });
+        doc.text(`Date: ${new Date(order.createdAt).toLocaleString('en-IN', { 
+          day: '2-digit', 
+          month: 'short', 
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })}`, 350, detailsStartY + 15, { align: 'right' });
+        doc.text(`Payment: ${(order.paymentMethod || 'cash').replace(/_/g, ' ').toUpperCase()}`, 350, detailsStartY + 30, { align: 'right' });
+
+        // Customer details (left side)
+        doc.y = detailsStartY;
+        this.addCustomerInfo(doc, order.customerName, order.customerEmail, order.customerPhone);
+        
+        doc.moveDown(2);
 
         // Items table header
         const tableTop = doc.y;
@@ -217,21 +279,31 @@ export class PDFService {
         // Total
         doc.moveTo(50, yPosition).lineTo(550, yPosition).stroke();
         yPosition += 15;
-        doc.fontSize(12).font('Helvetica-Bold');
-        doc.text('Total:', 380, yPosition);
+        doc.fontSize(14).font('Helvetica-Bold');
+        doc.text('GRAND TOTAL:', 320, yPosition);
         doc.text(`$${order.totalAmount}`, 480, yPosition, { align: 'right' });
+
+        // Amount in words (optional - you can implement this)
+        yPosition += 25;
+        doc.fontSize(9).font('Helvetica-Oblique');
+        doc.text(`Amount in words: (Add conversion logic if needed)`, 50, yPosition);
 
         // Notes
         if (order.notes) {
-          doc.moveDown(2);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('Notes:', { underline: true });
-          doc.text(order.notes);
+          doc.moveDown(1.5);
+          doc.fontSize(10).font('Helvetica-Bold').text('Notes:', 50);
+          doc.fontSize(10).font('Helvetica').text(order.notes, 50);
         }
 
-        // Footer
-        doc.moveDown(3);
-        doc.fontSize(8).text('Thank you for your business!', { align: 'center' });
+        // Terms and conditions
+        this.addTermsAndConditions(doc);
+
+        // Footer with signature line
+        doc.moveDown(2);
+        doc.fontSize(10).font('Helvetica');
+        doc.text('Authorized Signature: _____________________', 350, doc.y, { align: 'right' });
+        
+        this.addFooter(doc);
 
         doc.end();
       } catch (error) {
